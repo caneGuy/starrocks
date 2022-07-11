@@ -118,8 +118,9 @@ Status RowsetUpdateState::_do_load(Tablet* tablet, Rowset* rowset) {
     for (const auto& one_delete : _deletes) {
         _memory_usage += one_delete != nullptr ? one_delete->memory_usage() : 0;
     }
+
     const auto& rowset_meta_pb = rowset->rowset_meta()->get_meta_pb();
-    if (!rowset_meta_pb.has_txn_meta() || rowset->num_segments() == 0) {
+    if (!rowset_meta_pb.has_txn_meta() || rowset->num_segments() == 0 || rowset_meta_pb.txn_meta().has_merge_condition()) {
         return Status::OK();
     }
 
@@ -159,7 +160,7 @@ struct RowidSortEntry {
 //   }
 //   the read column values will be in this order: [default_value, (0,1), (0,3), (1,2), (1,3)]
 //   the indexes used to convert read columns values to write order will be: [2, 0, 4, 1, 0, 3]
-static void plan_read_by_rssid(const vector<uint64_t>& rowids, size_t* num_default,
+void RowsetUpdateState::plan_read_by_rssid(const vector<uint64_t>& rowids, size_t* num_default,
                                std::map<uint32_t, std::vector<uint32_t>>* rowids_by_rssid, vector<uint32_t>* idxes) {
     uint32_t n = rowids.size();
     phmap::node_hash_map<uint32_t, vector<RowidSortEntry>> sort_entry_by_rssid;
@@ -351,7 +352,7 @@ Status RowsetUpdateState::_check_and_resolve_conflict(Tablet* tablet, Rowset* ro
 Status RowsetUpdateState::apply(Tablet* tablet, Rowset* rowset, uint32_t rowset_id, EditVersion latest_applied_version,
                                 const PrimaryIndex& index) {
     const auto& rowset_meta_pb = rowset->rowset_meta()->get_meta_pb();
-    if (!rowset_meta_pb.has_txn_meta() || rowset->num_segments() == 0) {
+    if (!rowset_meta_pb.has_txn_meta() || rowset->num_segments() == 0 || rowset_meta_pb.txn_meta().has_merge_condition()) {
         return Status::OK();
     }
     // currently assume it's a partial update

@@ -27,6 +27,9 @@ public:
     MemTable(int64_t tablet_id, const Schema* schema, MemTableSink* sink, int64_t max_buffer_size,
              MemTracker* mem_tracker);
 
+    MemTable(int64_t tablet_id, const Schema* schema, const vector<SlotDescriptor*>* slot_descs, MemTableSink* sink,
+             const std::string merge_condition, MemTracker* mem_tracker);
+
     ~MemTable();
 
     int64_t tablet_id() const { return _tablet_id; }
@@ -86,6 +89,8 @@ private:
     std::unique_ptr<Column> _deletes;
 
     bool _use_slot_desc = true;
+    std::string _merge_condition;
+
     int64_t _max_buffer_size = config::write_buffer_size;
 
     // memory statistic

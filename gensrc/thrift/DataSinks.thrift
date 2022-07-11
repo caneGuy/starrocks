@@ -145,6 +145,7 @@ struct TOlapTableSink {
     12: required Descriptors.TOlapTableLocationParam location
     13: required Descriptors.TNodesInfo nodes_info
     14: optional i64 load_channel_timeout_s // the timeout of load channels in second
+    17: optional string merge_condition
 }
 
 struct TDataSink {

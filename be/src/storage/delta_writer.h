@@ -36,6 +36,7 @@ struct DeltaWriterOptions {
     // slots are in order of tablet's schema
     const std::vector<SlotDescriptor*>* slots;
     vectorized::GlobalDictByNameMaps* global_dicts = nullptr;
+    std::string merge_condition;
 };
 
 // Writer for a particular (load, index, tablet).

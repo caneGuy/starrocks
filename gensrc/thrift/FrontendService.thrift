@@ -565,6 +565,7 @@ struct TStreamLoadPutRequest {
     27: optional bool partial_update
     28: optional string transmission_compression_type
     29: optional i32 load_dop
+    30: optional string merge_condition
     // only valid when file type is CSV
     50: optional string rowDelimiter
 }

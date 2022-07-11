@@ -309,6 +309,7 @@ Status LocalTabletsChannel::_open_all_writers(const PTabletWriterOpenRequest& pa
         options.tuple_desc = _tuple_desc;
         options.slots = index_slots;
         options.global_dicts = &_global_dicts;
+        options.merge_condition = params.merge_condition();
 
         auto res = AsyncDeltaWriter::open(options, _mem_tracker);
         RETURN_IF_ERROR(res.status());
