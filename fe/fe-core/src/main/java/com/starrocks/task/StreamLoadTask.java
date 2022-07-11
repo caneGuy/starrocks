@@ -66,6 +66,7 @@ public class StreamLoadTask {
     // optional
     private List<ImportColumnDesc> columnExprDescs = Lists.newArrayList();
     private Expr whereExpr;
+    private Expr mergeConditionExpr;
     private ColumnSeparator columnSeparator;
     private RowDelimiter rowDelimiter;
     private PartitionNames partitions;
@@ -112,6 +113,10 @@ public class StreamLoadTask {
 
     public Expr getWhereExpr() {
         return whereExpr;
+    }
+
+    public Expr getMergeConditionExpr() {
+        return mergeConditionExpr;
     }
 
     public ColumnSeparator getColumnSeparator() {
@@ -257,7 +262,7 @@ public class StreamLoadTask {
         }
     }
 
-    public static StreamLoadTask fromRoutineLoadJob(RoutineLoadJob routineLoadJob) {
+    public static StreamLoadTask fromRoutineLoadJob(RoutineLoadJob routineLoadJob) throws UserException {
         TUniqueId dummyId = new TUniqueId();
         TFileFormatType fileFormatType = TFileFormatType.FORMAT_CSV_PLAIN;
         if (routineLoadJob.getFormat().equals("json")) {
@@ -269,13 +274,14 @@ public class StreamLoadTask {
         return streamLoadTask;
     }
 
-    private void setOptionalFromRoutineLoadJob(RoutineLoadJob routineLoadJob) {
+    private void setOptionalFromRoutineLoadJob(RoutineLoadJob routineLoadJob) throws UserException {
         // copy the columnExprDescs, cause it may be changed when planning.
         // so we keep the columnExprDescs in routine load job as origin.
         if (routineLoadJob.getColumnDescs() != null) {
             columnExprDescs = Lists.newArrayList(routineLoadJob.getColumnDescs());
         }
         whereExpr = routineLoadJob.getWhereExpr();
+        setMergeConditionExpr(routineLoadJob.getMergeCondition());
         columnSeparator = routineLoadJob.getColumnSeparator();
         rowDelimiter = routineLoadJob.getRowDelimiter();
         partitions = routineLoadJob.getPartitions();
@@ -349,6 +355,32 @@ public class StreamLoadTask {
             throw new UserException("parse columns header failed", e);
         }
         whereExpr = whereStmt.getExpr();
+    }
+
+    private void setMergeConditionExpr(String mergeConditionString) throws UserException {
+        // TODO:(caneGuy) Check merge condition
+        String whereSQL = new String("WHERE " + mergeConditionString);
+        SqlParser parser = new SqlParser(new SqlScanner(new StringReader(whereSQL)));
+        ImportWhereStmt whereStmt;
+        try {
+            whereStmt = (ImportWhereStmt) SqlParserUtils.getFirstStmt(parser);
+        } catch (Error e) {
+            LOG.warn("error happens when parsing where header, sql={}", whereSQL, e);
+            throw new AnalysisException("failed to parsing where header, maybe contain unsupported character");
+        } catch (AnalysisException e) {
+            LOG.warn("analyze where statement failed, sql={}, error={}",
+                    whereSQL, parser.getErrorMsg(whereSQL), e);
+            String errorMessage = parser.getErrorMsg(whereSQL);
+            if (errorMessage == null) {
+                throw e;
+            } else {
+                throw new AnalysisException(errorMessage, e);
+            }
+        } catch (Exception e) {
+            LOG.warn("failed to parse where header, sql={}", whereSQL, e);
+            throw new UserException("parse columns header failed", e);
+        }
+        mergeConditionExpr = whereStmt.getExpr();
     }
 
     private void setColumnSeparator(String oriSeparator) throws AnalysisException {

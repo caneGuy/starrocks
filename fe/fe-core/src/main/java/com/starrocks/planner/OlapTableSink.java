@@ -61,6 +61,7 @@ import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TExplainLevel;
+import com.starrocks.thrift.TExpr;
 import com.starrocks.thrift.TNodeInfo;
 import com.starrocks.thrift.TNodesInfo;
 import com.starrocks.thrift.TOlapTableIndexSchema;
@@ -129,6 +130,12 @@ public class OlapTableSink extends DataSink {
 
     public void updateLoadId(TUniqueId newLoadId) {
         tDataSink.getOlap_table_sink().setLoad_id(newLoadId);
+    }
+
+    public void complete(TExpr mergeCondition) throws UserException {
+        TOlapTableSink tSink = tDataSink.getOlap_table_sink();
+        tSink.setMerge_condition(mergeCondition);
+        complete();
     }
 
     // must called after tupleDescriptor is computed

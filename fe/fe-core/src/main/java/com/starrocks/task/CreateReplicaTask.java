@@ -61,6 +61,7 @@ public class CreateReplicaTask extends AgentTask {
 
     // bloom filter columns
     private Set<String> bfColumns;
+
     private double bfFpp;
 
     // indexes

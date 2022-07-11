@@ -57,6 +57,9 @@ public:
     void upsert(uint32_t rssid, uint32_t rowid_start, const vectorized::Column& pks, DeletesMap* deletes);
 
     // TODO(qzc): maybe unused, remove it or refactor it with the methods in use by template after a period of time
+    void upsert(uint32_t rssid, uint32_t rowid_start, const vectorized::Column& pks, uint32_t idx_begin,
+                uint32_t idx_end, DeletesMap* deletes);
+
     // used for compaction, try replace input rowsets' rowid with output segment's rowid, if
     // input rowsets' rowid doesn't exist, this indicates that the row of output rowset is
     // deleted during compaction, so append it's rowid into |deletes|
