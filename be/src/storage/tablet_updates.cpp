@@ -857,15 +857,14 @@ void TabletUpdates::_apply_rowset_commit(const EditVersionInfo& version_info) {
 
                     int idx_begin = 0;
                     int upsert_idx_step = 0;
-                    for (int  j = 0;  j < old_column->size(); ++ j) {
+                    for (int  j = 0;  j < old_column->size(); ++j) {
                         if (num_default > 0 && idxes[j] == 0) {
                             // plan_read_by_rssid will return idx with 0 if we have default value
                             upsert_idx_step++;
                         } else {
                             int r = old_column->compare_at(j, j, *new_columns[0].get(), -1);
                             if (r > 0) {
-                                index.upsert(rowset_id + i, idx_begin, *upserts[i],
-                                             idx_begin, idx_begin + upsert_idx_step, &new_deletes);
+                                index.upsert(rowset_id + i, 0, *upserts[i], idx_begin, idx_begin + upsert_idx_step, &new_deletes);
                                 manager->index_cache().update_object_size(index_entry, index.memory_usage());
 
                                 idx_begin = j + 1;
@@ -880,8 +879,7 @@ void TabletUpdates::_apply_rowset_commit(const EditVersionInfo& version_info) {
                     }
 
                     if (idx_begin < old_column->size()) {
-                        index.upsert(rowset_id + i, idx_begin, *upserts[i],
-                                     idx_begin, idx_begin + upsert_idx_step, &new_deletes);
+                        index.upsert(rowset_id + i, 0, *upserts[i], idx_begin, idx_begin + upsert_idx_step, &new_deletes);
                         manager->index_cache().update_object_size(index_entry, index.memory_usage());
                     }
                 } else {
