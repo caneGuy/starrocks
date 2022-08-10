@@ -295,6 +295,7 @@ SegmentIterator::SegmentIterator(std::shared_ptr<Segment> segment, vectorized::S
 Status SegmentIterator::_init() {
     SCOPED_RAW_TIMER(&_opts.stats->segment_init_ns);
     if (_opts.is_primary_keys && _opts.version > 0) {
+        SCOPED_RAW_TIMER(&_opts.stats->pk_acquire_condition_ns);
         TabletSegmentId tsid;
         tsid.tablet_id = _opts.tablet_id;
         tsid.segment_id = _opts.rowset_id + segment_id();
@@ -335,10 +336,14 @@ Status SegmentIterator::_init() {
     RETURN_IF_ERROR(_init_column_iterators<true>(_schema));
     // filter by index stage
     // Use indexes and predicates to filter some data page
-    RETURN_IF_ERROR(_init_bitmap_index_iterators());
-    RETURN_IF_ERROR(_get_row_ranges_by_keys());
-    RETURN_IF_ERROR(_apply_del_vector());
-    RETURN_IF_ERROR(_apply_bitmap_index());
+
+    {
+        SCOPED_RAW_TIMER(&_opts.stats->pk_apply_idx);
+        RETURN_IF_ERROR(_init_bitmap_index_iterators());
+        RETURN_IF_ERROR(_get_row_ranges_by_keys());
+        RETURN_IF_ERROR(_apply_del_vector());
+        RETURN_IF_ERROR(_apply_bitmap_index());
+    }
     RETURN_IF_ERROR(_get_row_ranges_by_zone_map());
     RETURN_IF_ERROR(_get_row_ranges_by_bloom_filter());
     RETURN_IF_ERROR(_get_row_ranges_by_rowid_range());
