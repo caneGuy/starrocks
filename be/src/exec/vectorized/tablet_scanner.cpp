@@ -315,6 +315,8 @@ void TabletScanner::update_counter() {
     COUNTER_UPDATE(_parent->_chunk_copy_timer, _reader->stats().vec_cond_chunk_copy_ns);
 
     COUNTER_UPDATE(_parent->_seg_init_timer, _reader->stats().segment_init_ns);
+    COUNTER_UPDATE(_parent->_seg_acquire_condition_timer, _reader->stats().pk_acquire_condition_ns);
+    COUNTER_UPDATE(_parent->_seg_apply_index_timer, _reader->stats().pk_apply_idx);
 
     int64_t cond_evaluate_ns = 0;
     cond_evaluate_ns += _reader->stats().vec_cond_evaluate_ns;
