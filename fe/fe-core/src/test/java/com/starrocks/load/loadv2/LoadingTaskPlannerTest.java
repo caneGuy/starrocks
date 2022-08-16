@@ -181,7 +181,7 @@ public class LoadingTaskPlannerTest {
         Config.load_parallel_instance_num = 1;
         long startTime = System.currentTimeMillis();
         LoadingTaskPlanner planner = new LoadingTaskPlanner(jobId, txnId, db.getId(), table, brokerDesc, fileGroups,
-                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, startTime, false);
+                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, startTime, false, "");
         planner.plan(loadId, fileStatusesList, 2);
         Assert.assertEquals(1, planner.getScanNodes().size());
         FileScanNode scanNode = (FileScanNode) planner.getScanNodes().get(0);
@@ -191,7 +191,7 @@ public class LoadingTaskPlannerTest {
         // load_parallel_instance_num: 2
         Config.load_parallel_instance_num = 2;
         planner = new LoadingTaskPlanner(jobId, txnId, db.getId(), table, brokerDesc, fileGroups,
-                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, startTime, false);
+                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, startTime, false, "");
         planner.plan(loadId, fileStatusesList, 2);
         scanNode = (FileScanNode) planner.getScanNodes().get(0);
         locationsList = scanNode.getScanRangeLocations(0);
@@ -201,7 +201,7 @@ public class LoadingTaskPlannerTest {
         Config.load_parallel_instance_num = 2;
         Config.max_broker_concurrency = 3;
         planner = new LoadingTaskPlanner(jobId, txnId, db.getId(), table, brokerDesc, fileGroups,
-                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, startTime, false);
+                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, startTime, false, "");
         planner.plan(loadId, fileStatusesList, 2);
         scanNode = (FileScanNode) planner.getScanNodes().get(0);
         locationsList = scanNode.getScanRangeLocations(0);
@@ -283,7 +283,7 @@ public class LoadingTaskPlannerTest {
 
         // plan
         LoadingTaskPlanner planner = new LoadingTaskPlanner(jobId, txnId, db.getId(), table, brokerDesc, fileGroups,
-                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false);
+                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false, "");
         planner.plan(loadId, fileStatusesList, 1);
 
         // 1. check fragment
@@ -421,7 +421,7 @@ public class LoadingTaskPlannerTest {
 
         // plan
         LoadingTaskPlanner planner = new LoadingTaskPlanner(jobId, txnId, db.getId(), table, brokerDesc, fileGroups,
-                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false);
+                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false, "");
         planner.plan(loadId, fileStatusesList, 1);
 
         // 1. check fragment
@@ -504,7 +504,7 @@ public class LoadingTaskPlannerTest {
 
         // plan
         LoadingTaskPlanner planner = new LoadingTaskPlanner(jobId, txnId, db.getId(), table, brokerDesc, fileGroups,
-                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false);
+                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false, "");
         planner.plan(loadId, fileStatusesList, 1);
 
         // 2. check scan node column expr
@@ -590,7 +590,7 @@ public class LoadingTaskPlannerTest {
 
         // plan
         LoadingTaskPlanner planner = new LoadingTaskPlanner(jobId, txnId, db.getId(), table, brokerDesc, fileGroups,
-                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false);
+                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false, "");
         planner.plan(loadId, fileStatusesList, 1);
 
         // 2. check scan node column expr
@@ -695,7 +695,7 @@ public class LoadingTaskPlannerTest {
 
         // plan
         LoadingTaskPlanner planner = new LoadingTaskPlanner(jobId, txnId, db.getId(), table, brokerDesc, fileGroups,
-                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false);
+                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false, "");
         planner.plan(loadId, fileStatusesList, 1);
 
         // 2. check scan node column expr
@@ -790,7 +790,7 @@ public class LoadingTaskPlannerTest {
 
         // plan
         LoadingTaskPlanner planner = new LoadingTaskPlanner(jobId, txnId, db.getId(), table, brokerDesc, fileGroups,
-                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false);
+                false, TimeUtils.DEFAULT_TIME_ZONE, 3600, System.currentTimeMillis(), false, "");
         planner.plan(loadId, fileStatusesList, 1);
 
         // 2. check scan node column expr

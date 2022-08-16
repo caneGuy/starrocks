@@ -208,7 +208,7 @@ private:
 
     void _clean_unused_rowset_metas();
 
-    void _do_manual_compact();
+    void _do_manual_compact(bool force_compact);
 
     Status _do_sweep(const std::string& scan_root, const time_t& local_tm_now, const int32_t expire);
 
@@ -231,6 +231,9 @@ private:
 
     // delete tablet with io error process function
     void* _disk_stat_monitor_thread_callback(void* arg);
+
+    // rocksdb meta compcation process function
+    void* _rocksdb_meta_compact_thread_callback(void* arg);
 
     // clean file descriptors cache
     void* _fd_cache_clean_callback(void* arg);
@@ -307,6 +310,9 @@ private:
     std::vector<std::thread> _path_scan_threads;
     // threads to run tablet checkpoint
     std::vector<std::thread> _tablet_checkpoint_threads;
+    // thread to compact rocksdb meta, see https://github.com/facebook/rocksdb/issues/5265
+    // remove this if we do not use range delete API of rocksdb
+    std::thread _rocksdb_meta_compact_thread;
 
     std::thread _compaction_scheduler;
 

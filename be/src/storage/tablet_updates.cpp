@@ -804,10 +804,8 @@ void TabletUpdates::_apply_rowset_commit(const EditVersionInfo& version_info) {
     const auto& txn_meta = rowset->rowset_meta()->get_meta_pb().txn_meta();
     if (txn_meta.has_merge_condition()) {
         for (int i = 0; i < _tablet.tablet_schema().columns().size(); ++i) {
-            LOG(INFO) << "Load process has merge condition name " << _tablet.tablet_schema().column(i).name();
             if (_tablet.tablet_schema().column(i).name() == txn_meta.merge_condition()) {
                 conditional_column = i;
-                LOG(INFO) << "Load process has merge condition id " << conditional_column;
                 break;
             }
         }

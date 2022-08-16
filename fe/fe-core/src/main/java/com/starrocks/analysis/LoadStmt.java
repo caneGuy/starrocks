@@ -117,6 +117,7 @@ public class LoadStmt extends DdlStmt {
             .add(VERSION)
             .add(TIMEZONE)
             .add(PARTIAL_UPDATE)
+            .add(MERGE_CONDITION)
             .build();
 
     public LoadStmt(LabelName label, List<DataDescription> dataDescriptions,

@@ -135,7 +135,6 @@ StatusOr<RowsetSharedPtr> BetaRowsetWriter::build() {
             _rowset_meta->set_txn_meta(*_rowset_txn_meta_pb);
         }
         if (!_context.merge_condition.empty() && !_context.partial_update_tablet_schema) {
-            LOG(INFO) << "Load process has merge condition " << _context.merge_condition;
             _rowset_txn_meta_pb->set_merge_condition(_context.merge_condition);
             _rowset_meta->set_txn_meta(*_rowset_txn_meta_pb);
         }

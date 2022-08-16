@@ -112,6 +112,7 @@ public abstract class LoadJob extends AbstractTxnStateChangeCallback implements 
     // reuse deleteFlag as partialUpdate
     // @Deprecated
     // protected boolean deleteFlag = false;
+    protected String mergeConditionStr = "";
 
     protected long createTimestamp = -1;
     protected long loadStartTimestamp = -1;
@@ -368,6 +369,10 @@ public abstract class LoadJob extends AbstractTxnStateChangeCallback implements 
             }
             if (properties.containsKey(LoadStmt.PARTIAL_UPDATE)) {
                 partialUpdate = Boolean.valueOf(properties.get(LoadStmt.PARTIAL_UPDATE));
+            }
+
+            if (properties.containsKey(LoadStmt.MERGE_CONDITION)) {
+                mergeConditionStr = properties.get(LoadStmt.MERGE_CONDITION);
             }
 
             if (properties.containsKey(LoadStmt.LOAD_MEM_LIMIT)) {
@@ -1004,6 +1009,7 @@ public abstract class LoadJob extends AbstractTxnStateChangeCallback implements 
         // reuse deleteFlag as partialUpdate
         // out.writeBoolean(deleteFlag);
         out.writeBoolean(partialUpdate);
+        Text.writeString(out, mergeConditionStr);
         out.writeLong(createTimestamp);
         out.writeLong(loadStartTimestamp);
         out.writeLong(finishTimestamp);
@@ -1046,6 +1052,9 @@ public abstract class LoadJob extends AbstractTxnStateChangeCallback implements 
         // reuse deleteFlag as partialUpdate
         // deleteFlag = in.readBoolean();
         partialUpdate = in.readBoolean();
+        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_93) {
+            mergeConditionStr = Text.readString(in);
+        }
         createTimestamp = in.readLong();
         loadStartTimestamp = in.readLong();
         finishTimestamp = in.readLong();

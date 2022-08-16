@@ -383,10 +383,8 @@ void MemTable::_sort_column_inc() {
     }
 
     if (!_merge_condition.empty()) {
-        LOG(INFO) << "Load process has merge condition " << _merge_condition;
         for (int i = 0; i < _vectorized_schema->num_fields(); ++i) {
             if (_vectorized_schema->field(i)->name() == _merge_condition) {
-                LOG(INFO) << "Load process has merge condition " << _vectorized_schema->field(i)->name();
                 columns.push_back(_chunk->get_column_by_index(i));
                 // Descending, null first
                 sort_orders.push_back(1);

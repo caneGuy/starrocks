@@ -65,6 +65,7 @@ public class LoadLoadingTask extends LoadTask {
     private final boolean partialUpdate;
     // timeout of load job, in seconds
     private final long timeoutS;
+    private String mergeConditionStr;
 
     private LoadingTaskPlanner planner;
 
@@ -72,7 +73,8 @@ public class LoadLoadingTask extends LoadTask {
                            BrokerDesc brokerDesc, List<BrokerFileGroup> fileGroups,
                            long jobDeadlineMs, long execMemLimit, boolean strictMode,
                            long txnId, LoadTaskCallback callback, String timezone,
-                           long timeoutS, long createTimestamp, boolean partialUpdate) {
+                           long timeoutS, long createTimestamp, boolean partialUpdate,
+                           String mergeConditionStr) {
         super(callback, TaskType.LOADING);
         this.db = db;
         this.table = table;
@@ -88,12 +90,13 @@ public class LoadLoadingTask extends LoadTask {
         this.timeoutS = timeoutS;
         this.createTimestamp = createTimestamp;
         this.partialUpdate = partialUpdate;
+        this.mergeConditionStr = mergeConditionStr;
     }
 
     public void init(TUniqueId loadId, List<List<TBrokerFileStatus>> fileStatusList, int fileNum) throws UserException {
         this.loadId = loadId;
         planner = new LoadingTaskPlanner(callback.getCallbackId(), txnId, db.getId(), table, brokerDesc, fileGroups,
-                strictMode, timezone, timeoutS, createTimestamp, partialUpdate);
+                strictMode, timezone, timeoutS, createTimestamp, partialUpdate, mergeConditionStr);
         planner.plan(loadId, fileStatusList, fileNum);
     }
 

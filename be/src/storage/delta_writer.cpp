@@ -166,7 +166,6 @@ Status DeltaWriter::_init() {
     } else {
         writer_context.tablet_schema = &_tablet->tablet_schema();
         if (_tablet->tablet_schema().keys_type() == KeysType::PRIMARY_KEYS && !_opt.merge_condition.empty()) {
-            LOG(INFO) << "Load process has merge condition " << _opt.merge_condition;
             writer_context.merge_condition = _opt.merge_condition;
         }
     }

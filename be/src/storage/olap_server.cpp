@@ -74,6 +74,12 @@ Status StorageEngine::start_bg_threads() {
     Thread::set_thread_name(_disk_stat_monitor_thread, "disk_monitor");
     LOG(INFO) << "disk stat monitor thread started";
 
+    if (config::manual_compact_periodically) {
+        _rocksdb_meta_compact_thread = std::thread([this] { _rocksdb_meta_compact_thread_callback(nullptr); });
+        Thread::set_thread_name(_rocksdb_meta_compact_thread, "rocksdb_compact");
+        LOG(INFO) << "rocksdb meta compact thread started";
+    }
+
     // convert store map to vector
     std::vector<DataDir*> data_dirs;
     for (auto& tmp_store : _store_map) {
@@ -309,6 +315,24 @@ void* StorageEngine::_disk_stat_monitor_thread_callback(void* arg) {
         if (interval <= 0) {
             LOG(WARNING) << "disk_stat_monitor_interval config is illegal: " << interval << ", force set to 1";
             interval = 1;
+        }
+        SLEEP_IN_BG_WORKER(interval);
+    }
+
+    return nullptr;
+}
+
+void* StorageEngine::_rocksdb_meta_compact_thread_callback(void* arg) {
+#ifdef GOOGLE_PROFILER
+    ProfilerRegisterThread();
+#endif
+    while (!_bg_worker_stopped.load(std::memory_order_consume)) {
+        _do_manual_compact(true);
+
+        int32_t interval = config::manual_compact_periodically_interval;
+        if (interval <= 0) {
+            LOG(WARNING) << "manual_compact_periodically_interval config is illegal: " << interval << ", force set to 1800";
+            interval = 1800;
         }
         SLEEP_IN_BG_WORKER(interval);
     }

@@ -25,10 +25,8 @@ inline int compare_chunk(size_t key_columns, const Chunk& lhs, size_t m, const C
     }
 
     if (!merge_condition.empty()) {
-        LOG(INFO) << "Load process has merge condition " << merge_condition;
         for (size_t i = 0; i < lhs.num_columns(); i++) {
             if (_schema.field(i)->name() == merge_condition) {
-                LOG(INFO) << "Load process has merge condition " << _schema.field(i)->name();
                 const ColumnPtr& lc = lhs.get_column_by_index(i);
                 const ColumnPtr& rc = rhs.get_column_by_index(i);
                 if (int r = lc->compare_at(m, n, *rc, -1); r != 0) {
