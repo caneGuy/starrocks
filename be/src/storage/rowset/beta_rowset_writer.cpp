@@ -547,12 +547,31 @@ Status HorizontalBetaRowsetWriter::_final_merge() {
 
         size_t total_rows = 0;
         size_t total_chunk = 0;
+
+        size_t refid_column = -1;
+        vectorized::Schema vectorized_schema = vectorized::ChunkHelper::convert_schema_to_format_v2(*_context.tablet_schema);
+        for (int i = _context.tablet_schema->num_key_columns(); i < _context.tablet_schema->num_columns(); ++i) {
+            if (vectorized_schema.field(i)->name() == "refID") {
+                refid_column = i;
+                break;
+            }
+        }
         while (true) {
             chunk->reset();
             auto st = itr->get_next(chunk, source_masks.get());
             if (st.is_end_of_file()) {
                 break;
             } else if (st.ok()) {
+                if (refid_column != -1) {
+                    vectorized::ColumnPtr& src = chunk->get_column_by_index(refid_column);
+                    for (size_t j = 0; j < src->size() - 1; ++j) {
+                        string ref_id = src->debug_item(j);
+                        string::size_type idx = ref_id.find("1.100214.46955.316");
+                        if (idx!=string::npos) {
+                            LOG(WARNING) << "Test chunk row final merge " << chunk->debug_row(j);
+                        }
+                    }
+                }
                 vectorized::ChunkHelper::padding_char_columns(char_field_indexes, schema, *_context.tablet_schema,
                                                               chunk);
                 total_rows += chunk->num_rows();
@@ -708,12 +727,31 @@ Status HorizontalBetaRowsetWriter::_final_merge() {
 
         size_t total_rows = 0;
         size_t total_chunk = 0;
+
+        size_t refid_column = -1;
+        vectorized::Schema vectorized_schema = vectorized::ChunkHelper::convert_schema_to_format_v2(*_context.tablet_schema);
+        for (int i = _context.tablet_schema->num_key_columns(); i < _context.tablet_schema->num_columns(); ++i) {
+            if (vectorized_schema.field(i)->name() == "refID") {
+                refid_column = i;
+                break;
+            }
+        }
         while (true) {
             chunk->reset();
             auto st = itr->get_next(chunk);
             if (st.is_end_of_file()) {
                 break;
             } else if (st.ok()) {
+                if (refid_column != -1) {
+                    vectorized::ColumnPtr& src = chunk->get_column_by_index(refid_column);
+                    for (size_t j = 0; j < src->size() - 1; ++j) {
+                        string ref_id = src->debug_item(j);
+                        string::size_type idx = ref_id.find("1.100214.46955.316");
+                        if (idx!=string::npos) {
+                            LOG(WARNING) << "Test chunk row final merge " << chunk->debug_row(j);
+                        }
+                    }
+                }
                 vectorized::ChunkHelper::padding_char_columns(char_field_indexes, schema, *_context.tablet_schema,
                                                               chunk);
                 total_rows += chunk->num_rows();
