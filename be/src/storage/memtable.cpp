@@ -132,15 +132,6 @@ bool MemTable::insert(const Chunk& chunk, const uint32_t* indexes, uint32_t from
         // instead of the column name.
         for (int i = 0; i < _slot_descs->size(); ++i) {
             const ColumnPtr& src = chunk.get_column_by_slot_id((*_slot_descs)[i]->id());
-            if ((*_slot_descs)[i]->col_name() == "refID") {
-                for (size_t j = 0; j < src->size() - 1; ++j) {
-                    string ref_id = src->debug_item(j);
-                    string::size_type idx = ref_id.find("1.100214.46955.316");
-                    if (idx!=string::npos) {
-                        LOG(WARNING) << "Test chunk row " << chunk.debug_row(j);
-                    }
-                }
-            }
             ColumnPtr& dest = _chunk->get_column_by_index(i);
             dest->append_selective(*src, indexes, from, size);
         }
@@ -392,7 +383,6 @@ void MemTable::_sort_column_inc() {
     }
 
     if (!_merge_condition.empty()) {
-        LOG(WARNING) << "Test merge condition " << _merge_condition;
         for (int i = 0; i < _vectorized_schema->num_fields(); ++i) {
             if (_vectorized_schema->field(i)->name() == _merge_condition) {
                 columns.push_back(_chunk->get_column_by_index(i));
