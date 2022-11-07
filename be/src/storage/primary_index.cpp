@@ -832,6 +832,7 @@ void PrimaryIndex::_set_schema(const vectorized::Schema& pk_schema) {
     _pk_schema = pk_schema;
     _enc_pk_type = PrimaryKeyEncoder::encoded_primary_key_type(_pk_schema);
     size_t fix_size = PrimaryKeyEncoder::get_encoded_fixed_size(_pk_schema);
+    _key_size = PrimaryKeyEncoder::get_encoded_fixed_size(_pk_schema);
     _pkey_to_rssid_rowid = std::move(create_hash_index(_enc_pk_type, fix_size));
 }
 
@@ -1063,12 +1064,19 @@ Status PrimaryIndex::_insert_into_persistent_index(uint32_t rssid, const vector<
 }
 
 void PrimaryIndex::_upsert_into_persistent_index(uint32_t rssid, uint32_t rowid_start, const vectorized::Column& pks,
-                                                 DeletesMap* deletes) {
+                                                 uint32_t idx_begin, uint32_t idx_end, DeletesMap* deletes) {
     std::vector<uint64_t> values;
-    values.reserve(pks.size());
-    std::vector<uint64_t> old_values(pks.size(), NullIndexValue);
-    _build_persistent_values(rssid, rowid_start, 0, pks.size(), &values);
-    _persistent_index->upsert(pks.size(), pks.continuous_data(), reinterpret_cast<IndexValue*>(values.data()),
+    uint32_t n = idx_end - idx_begin;
+    values.reserve(n);
+    std::vector<uint64_t> old_values(n, NullIndexValue);
+    _build_persistent_values(rssid, rowid_start, idx_begin, idx_end, &values);
+
+    const uint8_t* keys = pks.continuous_data();
+    if (idx_begin > 0) {
+        keys += idx_begin * _key_size;
+    }
+
+    _persistent_index->upsert(n, keys, reinterpret_cast<IndexValue*>(values.data()),
                               reinterpret_cast<IndexValue*>(old_values.data()));
     for (uint32_t i = 0; i < old_values.size(); ++i) {
         uint64_t old = old_values[i];
@@ -1135,7 +1143,7 @@ Status PrimaryIndex::insert(uint32_t rssid, uint32_t rowid_start, const vectoriz
 void PrimaryIndex::upsert(uint32_t rssid, uint32_t rowid_start, const vectorized::Column& pks, DeletesMap* deletes) {
     DCHECK(_status.ok() && (_pkey_to_rssid_rowid || _persistent_index));
     if (_persistent_index != nullptr) {
-        _upsert_into_persistent_index(rssid, rowid_start, pks, deletes);
+        _upsert_into_persistent_index(rssid, rowid_start, pks, 0, pks.size(), deletes);
     } else {
         _pkey_to_rssid_rowid->upsert(rssid, rowid_start, pks, 0, pks.size(), deletes);
     }
@@ -1143,8 +1151,12 @@ void PrimaryIndex::upsert(uint32_t rssid, uint32_t rowid_start, const vectorized
 
 void PrimaryIndex::upsert(uint32_t rssid, uint32_t rowid_start, const vectorized::Column& pks, uint32_t idx_begin,
                           uint32_t idx_end, DeletesMap* deletes) {
-    DCHECK(_status.ok() && (_pkey_to_rssid_rowid));
-    _pkey_to_rssid_rowid->upsert(rssid, rowid_start, pks, idx_begin, idx_end, deletes);
+    DCHECK(_status.ok() && (_pkey_to_rssid_rowid || _persistent_index));
+    if (_persistent_index != nullptr) {
+        _upsert_into_persistent_index(rssid, rowid_start, pks, idx_begin, idx_end, deletes);
+    } else {
+        _pkey_to_rssid_rowid->upsert(rssid, rowid_start, pks, idx_begin, idx_end, deletes);
+    }
 }
 
 [[maybe_unused]] void PrimaryIndex::try_replace(uint32_t rssid, uint32_t rowid_start, const vectorized::Column& pks,

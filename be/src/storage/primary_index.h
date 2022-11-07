@@ -118,7 +118,7 @@ private:
     Status _insert_into_persistent_index(uint32_t rssid, const vector<uint32_t>& rowids, const vectorized::Column& pks);
 
     void _upsert_into_persistent_index(uint32_t rssid, uint32_t rowid_start, const vectorized::Column& pks,
-                                       DeletesMap* deletes);
+                                       uint32_t idx_begin, uint32_t idx_end, DeletesMap* deletes);
 
     void _erase_persistent_index(const vectorized::Column& key_col, DeletesMap* deletes);
 
@@ -130,6 +130,7 @@ private:
     std::mutex _lock;
     std::atomic<bool> _loaded{false};
     Status _status;
+    size_t _key_size = 0;
     int64_t _tablet_id = 0;
     vectorized::Schema _pk_schema;
     FieldType _enc_pk_type = OLAP_FIELD_TYPE_UNKNOWN;
