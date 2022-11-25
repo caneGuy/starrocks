@@ -745,6 +745,11 @@ CONF_String(starmgr_addr, "");
 CONF_Int32(starlet_port, "9070");
 #endif
 
+// Used to limit buffer size of tablet send channel.
+CONF_mInt64(send_channel_buffer_limit, "67108864");
+
+CONF_mInt64(l0_max_file_size, "209715200"); // 200MB
+
 } // namespace config
 
 } // namespace starrocks
