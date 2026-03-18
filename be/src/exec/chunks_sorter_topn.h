@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "column/vectorized_fwd.h"
 #include "exec/chunks_sorter.h"
 #include "exec/sorting/merge.h"
@@ -70,7 +72,8 @@ public:
                      const TTopNType::type topn_type = TTopNType::ROW_NUMBER,
                      size_t max_buffered_rows = kDefaultMaxBufferRows,
                      size_t max_buffered_bytes = kDefaultMaxBufferBytes,
-                     size_t max_buffered_chunks = kDefaultBufferedChunks);
+                     size_t max_buffered_chunks = kDefaultBufferedChunks,
+                     const std::vector<SlotId>& early_materialized_slots = {});
     ~ChunksSorterTopn() override;
 
     // Append a Chunk for sort.
@@ -199,6 +202,22 @@ private:
 
     RuntimeProfile::Counter* _sort_filter_rows = nullptr;
     RuntimeProfile::Counter* _sort_filter_timer = nullptr;
+
+    // Late materialization: sort only order-by columns, reconstruct others via ordinals
+    static constexpr int kRowOffsetBits = 16;
+    static constexpr uint64_t kRowOffsetMask = (1ULL << kRowOffsetBits) - 1;
+
+    std::unordered_set<SlotId> _early_materialized_slots;
+    bool _use_late_materialization = false;
+    std::vector<ChunkPtr> _original_full_chunks;
+    size_t _next_global_chunk_id = 0;
+    std::vector<SlotId> _column_id_to_slot_id;
+    bool _schema_initialized = false;
+
+    void _init_late_materialization_schema(const ChunkPtr& chunk);
+    ChunkPtr _create_thin_chunk(const ChunkPtr& chunk, size_t chunk_id);
+    ChunkPtr _late_materialize(const ChunkPtr& thin_chunk);
+    void _gc_unreferenced_original_chunks();
 };
 
 } // namespace starrocks

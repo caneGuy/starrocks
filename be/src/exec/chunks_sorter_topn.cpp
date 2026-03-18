@@ -26,6 +26,7 @@
 #include "gutil/casts.h"
 #include "runtime/runtime_state.h"
 #include "types/logical_type_infra.h"
+#include "column/fixed_length_column.h"
 #include "util/orlp/pdqsort.h"
 #include "util/runtime_profile.h"
 #include "util/stopwatch.hpp"
@@ -58,7 +59,8 @@ ChunksSorterTopn::ChunksSorterTopn(RuntimeState* state, const std::vector<ExprCo
                                    const std::vector<bool>* is_asc_order, const std::vector<bool>* is_null_first,
                                    const std::string& sort_keys, size_t offset, size_t limit,
                                    const TTopNType::type topn_type, size_t max_buffered_rows, size_t max_buffered_bytes,
-                                   size_t max_buffered_chunks)
+                                   size_t max_buffered_chunks,
+                                   const std::vector<SlotId>& early_materialized_slots)
         : ChunksSorter(state, sort_exprs, is_asc_order, is_null_first, sort_keys, true),
           _max_buffered_rows(max_buffered_rows),
           _max_buffered_bytes(max_buffered_bytes),
@@ -66,7 +68,9 @@ ChunksSorterTopn::ChunksSorterTopn(RuntimeState* state, const std::vector<ExprCo
           _init_merged_segment(false),
           _limit(limit),
           _offset(offset),
-          _topn_type(topn_type) {
+          _topn_type(topn_type),
+          _early_materialized_slots(early_materialized_slots.begin(), early_materialized_slots.end()) {
+    _use_late_materialization = !_early_materialized_slots.empty();
     DCHECK_GT(_get_number_of_rows_to_sort(), 0) << "output rows can't be empty";
     DCHECK(_topn_type == TTopNType::ROW_NUMBER || _offset == 0);
     _init_buffered_chunks = tunning_buffered_chunks(_get_number_of_rows_to_sort());
@@ -89,14 +93,25 @@ Status ChunksSorterTopn::update(RuntimeState* state, const ChunkPtr& chunk) {
     if (_limit == 0) {
         return Status::OK();
     }
+
+    ChunkPtr working_chunk = chunk;
+    if (_use_late_materialization) {
+        if (!_schema_initialized) {
+            _init_late_materialization_schema(chunk);
+        }
+        size_t chunk_id = _next_global_chunk_id++;
+        _original_full_chunks.push_back(chunk);
+        working_chunk = _create_thin_chunk(chunk, chunk_id);
+    }
+
     auto& raw_chunks = _raw_chunks.chunks;
     size_t chunk_number = raw_chunks.size();
     size_t prev_chunk_memusage = 0;
     if (chunk_number <= 0) {
-        raw_chunks.push_back(chunk);
+        raw_chunks.push_back(working_chunk);
         chunk_number++;
-    } else if (raw_chunks[chunk_number - 1]->num_rows() + chunk->num_rows() > _state->chunk_size()) {
-        raw_chunks.push_back(chunk);
+    } else if (raw_chunks[chunk_number - 1]->num_rows() + working_chunk->num_rows() > _state->chunk_size()) {
+        raw_chunks.push_back(working_chunk);
         chunk_number++;
     } else {
         prev_chunk_memusage = raw_chunks[chunk_number - 1]->memory_usage();
@@ -104,15 +119,17 @@ Status ChunksSorterTopn::update(RuntimeState* state, const ChunkPtr& chunk) {
         // columns in chunk may have same column ptr
         // append_safe will check size of all columns in dest chunk
         // to ensure same column will not apppend repeatedly.
-        raw_chunks[chunk_number - 1]->append_safe(*chunk);
+        raw_chunks[chunk_number - 1]->append_safe(*working_chunk);
     }
     _raw_chunks.update_mem_usage(raw_chunks[chunk_number - 1]->memory_usage() - prev_chunk_memusage);
-    _raw_chunks.size_of_rows += chunk->num_rows();
+    _raw_chunks.size_of_rows += working_chunk->num_rows();
 
     // Avoid TOPN from using too much memory.
     bool exceed_mem_limit = _raw_chunks.mem_usage > _max_buffered_bytes;
     if (exceed_mem_limit) {
-        return _sort_chunks(state);
+        RETURN_IF_ERROR(_sort_chunks(state));
+        _gc_unreferenced_original_chunks();
+        return Status::OK();
     }
 
     // When number of Chunks exceeds _buffered_chunks_capacity or rows greater than _max_buffered_rows , run sort and then part of
@@ -120,7 +137,9 @@ Status ChunksSorterTopn::update(RuntimeState* state, const ChunkPtr& chunk) {
     // TopN caches _limit or _max_buffered_chunks primitive chunks,
     // performs sorting once, and discards extra rows
     if (chunk_number >= _buffered_chunks_capacity || _raw_chunks.size_of_rows > _max_buffered_rows) {
-        return _sort_chunks(state);
+        RETURN_IF_ERROR(_sort_chunks(state));
+        _gc_unreferenced_original_chunks();
+        return Status::OK();
     }
 
     return Status::OK();
@@ -133,6 +152,7 @@ Status ChunksSorterTopn::do_done(RuntimeState* state) {
     }
 
     _rank_pruning();
+    _gc_unreferenced_original_chunks();
 
     // Skip top OFFSET rows
     size_t skip_offset = _offset;
@@ -211,6 +231,9 @@ Status ChunksSorterTopn::get_next(ChunkPtr* chunk, bool* eos) {
     MergedRun& run = _merged_runs.front();
     *chunk = run.steal_chunk(chunk_size);
     if (*chunk != nullptr) {
+        if (_use_late_materialization) {
+            *chunk = _late_materialize(*chunk);
+        }
         RETURN_IF_ERROR((*chunk)->downgrade());
     }
     if (run.empty()) {
@@ -778,6 +801,85 @@ void ChunksSorterTopn::_rank_pruning() {
         _merged_runs.at(peer_group_end_index_in_runs).set_range(0, peer_group_end_index_in_chunk);
         for (int i = peer_group_end_index_in_runs + 1; i < _merged_runs.num_chunks(); ++i) {
             _merged_runs.pop_back();
+        }
+    }
+}
+
+
+void ChunksSorterTopn::_init_late_materialization_schema(const ChunkPtr& chunk) {
+    auto& slot_id_to_column_id = chunk->get_slot_id_to_index_map();
+    _column_id_to_slot_id.resize(slot_id_to_column_id.size());
+    for (const auto& it : slot_id_to_column_id) {
+        _column_id_to_slot_id[it.second] = it.first;
+    }
+    _schema_initialized = true;
+}
+
+ChunkPtr ChunksSorterTopn::_create_thin_chunk(const ChunkPtr& chunk, size_t chunk_id) {
+    auto thin_chunk = std::make_shared<Chunk>();
+    for (auto slot_id : _column_id_to_slot_id) {
+        if (_early_materialized_slots.count(slot_id)) {
+            thin_chunk->append_column(chunk->get_column_by_slot_id(slot_id), slot_id);
+        }
+    }
+    size_t num_rows = chunk->num_rows();
+    auto ordinal_column = FixedLengthColumn<uint64_t>::create();
+    auto& ordinal_data = ordinal_column->get_data();
+    raw::make_room(&ordinal_data, num_rows);
+    for (size_t i = 0; i < num_rows; i++) {
+        ordinal_data[i] = (static_cast<uint64_t>(chunk_id) << kRowOffsetBits) | static_cast<uint64_t>(i);
+    }
+    thin_chunk->append_column(std::move(ordinal_column), Chunk::SORT_ORDINAL_COLUMN_SLOT_ID);
+    return thin_chunk;
+}
+
+ChunkPtr ChunksSorterTopn::_late_materialize(const ChunkPtr& thin_chunk) {
+    auto ordinal_column = thin_chunk->get_column_by_slot_id(Chunk::SORT_ORDINAL_COLUMN_SLOT_ID);
+    const auto& ordinal_data =
+            down_cast<FixedLengthColumn<uint64_t>*>(ordinal_column.get())->get_data();
+    size_t num_rows = thin_chunk->num_rows();
+    auto full_chunk = std::make_shared<Chunk>();
+
+    for (auto slot_id : _column_id_to_slot_id) {
+        if (_early_materialized_slots.count(slot_id)) {
+            full_chunk->append_column(thin_chunk->get_column_by_slot_id(slot_id), slot_id);
+        } else {
+            ChunkPtr first_valid;
+            for (auto& c : _original_full_chunks) {
+                if (c != nullptr) { first_valid = c; break; }
+            }
+            auto src_column = first_valid->get_column_by_slot_id(slot_id);
+            auto dst_column = src_column->clone_empty();
+            dst_column->reserve(num_rows);
+            for (size_t i = 0; i < num_rows; i++) {
+                uint64_t ordinal = ordinal_data[i];
+                size_t cid = ordinal >> kRowOffsetBits;
+                size_t row_offset = ordinal & kRowOffsetMask;
+                dst_column->append(*_original_full_chunks[cid]->get_column_by_slot_id(slot_id), row_offset, 1);
+            }
+            full_chunk->append_column(std::move(dst_column), slot_id);
+        }
+    }
+    return full_chunk;
+}
+
+void ChunksSorterTopn::_gc_unreferenced_original_chunks() {
+    if (!_use_late_materialization || _original_full_chunks.empty()) return;
+
+    std::unordered_set<size_t> referenced_ids;
+    for (size_t i = 0; i < _merged_runs.num_chunks(); i++) {
+        const auto& run = _merged_runs.at(i);
+        if (run.chunk == nullptr || !run.chunk->is_slot_exist(Chunk::SORT_ORDINAL_COLUMN_SLOT_ID)) continue;
+        auto col = run.chunk->get_column_by_slot_id(Chunk::SORT_ORDINAL_COLUMN_SLOT_ID);
+        const auto& data = down_cast<FixedLengthColumn<uint64_t>*>(col.get())->get_data();
+        for (size_t j = run.start_index(); j < run.end_index(); j++) {
+            referenced_ids.insert(data[j] >> kRowOffsetBits);
+        }
+    }
+
+    for (size_t i = 0; i < _original_full_chunks.size(); i++) {
+        if (_original_full_chunks[i] != nullptr && referenced_ids.find(i) == referenced_ids.end()) {
+            _original_full_chunks[i].reset();
         }
     }
 }
