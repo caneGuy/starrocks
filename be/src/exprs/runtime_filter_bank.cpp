@@ -557,6 +557,7 @@ Status RuntimeFilterProbeDescriptor::init(ObjectPool* pool, const TRuntimeFilter
     _join_mode = desc.build_join_mode;
     _is_stream_build_filter = desc.__isset.filter_type && (desc.filter_type == TRuntimeFilterBuildType::TOPN_FILTER ||
                                                            desc.filter_type == TRuntimeFilterBuildType::AGG_FILTER);
+    _is_topn_filter = desc.__isset.filter_type && desc.filter_type == TRuntimeFilterBuildType::TOPN_FILTER;
     _skip_wait = _is_stream_build_filter;
     _is_group_colocate_rf = desc.__isset.build_from_group_execution && desc.build_from_group_execution;
 
@@ -634,6 +635,10 @@ void RuntimeFilterProbeDescriptor::replace_probe_expr_ctx(RuntimeState* state, c
     _probe_expr_ctx = state->obj_pool()->add(new ExprContext(new_probe_expr_ctx->root()));
     WARN_IF_ERROR(_probe_expr_ctx->prepare(state), "prepare probe expr failed");
     WARN_IF_ERROR(_probe_expr_ctx->open(state), "open probe expr failed");
+}
+
+bool RuntimeFilterProbeDescriptor::is_topn_filter() const {
+    return _is_topn_filter;
 }
 
 std::string RuntimeFilterProbeDescriptor::debug_string() const {

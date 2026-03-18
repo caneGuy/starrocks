@@ -1191,7 +1191,7 @@ Status ChunkPredicateBuilder<E, Type>::_get_column_predicates(PredicateParser* p
             if (slot_desc == nullptr) {
                 continue;
             }
-            if (desc->is_stream_build_filter()) {
+            if (desc->is_stream_build_filter() && !desc->is_topn_filter()) {
                 continue;
             }
 
@@ -1200,6 +1200,7 @@ Status ChunkPredicateBuilder<E, Type>::_get_column_predicates(PredicateParser* p
             // so runtime filters still needs to be used.
             desc->set_has_push_down_to_storage(_opts.is_olap_scan);
             // add placeholder predicates, so that the columns needed by runtime filter can be read in the first stage of late materialization
+            // For TopN filters, this ensures the sort column is read in the early phase of late materialization
             std::unique_ptr<ColumnPredicate> p(
                     new_column_placeholder_predicate(get_type_info(slot_desc->type().type), column_id));
             VLOG_FILE << "add runtime filter predicate, slot_id=" << slot_id << ", column_id:" << column_id
@@ -1392,7 +1393,7 @@ StatusOr<RuntimeFilterPredicates> ScanConjunctsManager::get_runtime_filter_predi
         if (slot_desc == nullptr) {
             continue;
         }
-        if (desc->is_stream_build_filter()) {
+        if (desc->is_stream_build_filter() && !desc->is_topn_filter()) {
             continue;
         }
         // If the runtime filter's partition-by-exprs's size is greater than 1, skip to push it down to storage engine.
