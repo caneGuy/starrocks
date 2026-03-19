@@ -232,6 +232,11 @@ public class DeltaLakeScanNode extends ScanNode {
     }
 
     @Override
+    protected boolean supportTopNRuntimeFilter() {
+        return true;
+    }
+
+    @Override
     public void setScanSampleStrategy(RemoteFilesSampleStrategy strategy) {
         scanRangeSource.setSampleStrategy(strategy);
     }

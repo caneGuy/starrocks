@@ -161,4 +161,9 @@ public class HudiScanNode extends ScanNode {
     public boolean canUseRuntimeAdaptiveDop() {
         return true;
     }
+
+    @Override
+    protected boolean supportTopNRuntimeFilter() {
+        return true;
+    }
 }

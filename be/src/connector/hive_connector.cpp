@@ -466,6 +466,20 @@ Status HiveDataSource::_decompose_conjunct_ctxs(RuntimeState* state) {
     }
     // rewrite dict
     RETURN_IF_ERROR(state->mutable_dict_optimize_parser()->rewrite_conjuncts(&_scanner_conjunct_ctxs));
+
+    // Mark TopN runtime filter sort columns as conjunct-related slots so that
+    // Parquet/ORC late materialization treats them as active (read first) columns
+    // rather than lazy columns.
+    if (_runtime_filters != nullptr) {
+        for (auto& [_, desc] : _runtime_filters->descriptors()) {
+            if (desc->is_stream_build_filter()) {
+                SlotId slot_id;
+                if (desc->is_probe_slot_ref(&slot_id)) {
+                    _slots_in_conjunct.insert(slot_id);
+                }
+            }
+        }
+    }
     return Status::OK();
 }
 
