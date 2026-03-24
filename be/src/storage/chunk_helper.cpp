@@ -611,8 +611,9 @@ void ChunkPipelineAccumulator::push(const ChunkPtr& chunk) {
 
     // Large-batch passthrough (Arrow-rs BatchCoalescer style 3-way dispatch):
     // If incoming chunk is already large enough (>= max_size/2), avoid unnecessary copying.
+    // Only apply when chunk compaction is enabled via session variable.
     size_t passthrough_threshold = _max_size / 2;
-    if (chunk->num_rows() >= passthrough_threshold) {
+    if (_enable_compaction && chunk->num_rows() >= passthrough_threshold) {
         if (_in_chunk == nullptr) {
             // Case 1: Empty buffer + large batch -> direct passthrough
             _out_chunk = chunk;

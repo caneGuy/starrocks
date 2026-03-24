@@ -130,6 +130,7 @@ class ChunkPipelineAccumulator {
 public:
     ChunkPipelineAccumulator() = default;
     void set_max_size(size_t max_size) { _max_size = max_size; }
+    void set_enable_compaction(bool enable) { _enable_compaction = enable; }
     void push(const ChunkPtr& chunk);
     ChunkPtr& pull();
     void finalize();
@@ -164,6 +165,7 @@ private:
     // so incremental calculation is used to avoid becoming a performance bottleneck.
     size_t _mem_usage = 0;
     bool _finalized = false;
+    bool _enable_compaction = true;
 
     // --- Compaction statistics ---
     size_t _compaction_count = 0;

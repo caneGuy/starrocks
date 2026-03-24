@@ -623,6 +623,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private static final String ENABLE_FINE_GRAINED_RANGE_PREDICATE = "enable_fine_grained_range_predicate";
 
     private static final String ENABLE_RESULT_SINK_ACCUMULATE = "enable_result_sink_accumulate";
+    public static final String ENABLE_CHUNK_COMPACTION = "enable_chunk_compaction";
 
     public static final String ENABLE_WAIT_DEPENDENT_EVENT = "enable_wait_dependent_event";
 
@@ -2635,6 +2636,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_RESULT_SINK_ACCUMULATE)
     private boolean enableResultSinkAccumulate = true;
+    @VariableMgr.VarAttr(name = ENABLE_CHUNK_COMPACTION)
+    private boolean enableChunkCompaction = true;
 
     @VarAttr(name = CHOOSE_EXECUTE_INSTANCES_MODE)
     private String chooseExecuteInstancesMode = LOCALITY.name();
@@ -5403,6 +5406,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         tResult.setEnable_hyperscan_vec(enableHyperscanVec);
         tResult.setJit_level(jitLevel);
         tResult.setEnable_result_sink_accumulate(enableResultSinkAccumulate);
+        tResult.setEnable_chunk_compaction(enableChunkCompaction);
         tResult.setEnable_connector_sink_writer_scaling(enableConnectorSinkWriterScaling);
         tResult.setEnable_wait_dependent_event(enableWaitDependentEvent);
         tResult.setConnector_max_split_size(connectorMaxSplitSize);

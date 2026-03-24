@@ -21,6 +21,7 @@ namespace starrocks::pipeline {
 Status ChunkAccumulateOperator::prepare(RuntimeState* state) {
     RETURN_IF_ERROR(Operator::prepare(state));
     _acc.set_max_size(state->chunk_size());
+    _acc.set_enable_compaction(state->enable_chunk_compaction());
 
     _compaction_count_counter = ADD_COUNTER(_unique_metrics, "CompactionCount", TUnit::UNIT);
     _compaction_rows_counter = ADD_COUNTER(_unique_metrics, "CompactionRows", TUnit::UNIT);

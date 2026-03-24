@@ -131,6 +131,9 @@ public:
     const DescriptorTbl& desc_tbl() const { return *_desc_tbl; }
     void set_desc_tbl(DescriptorTbl* desc_tbl) { _desc_tbl = desc_tbl; }
     int chunk_size() const { return _query_options.batch_size; }
+    bool enable_chunk_compaction() const {
+        return _query_options.__isset.enable_chunk_compaction ? _query_options.enable_chunk_compaction : true;
+    }
     void set_chunk_size(int chunk_size) { _query_options.batch_size = chunk_size; }
     bool abort_on_default_limit_exceeded() const { return _query_options.abort_on_default_limit_exceeded; }
     int64_t timestamp_ms() const { return _timestamp_us / 1000; }

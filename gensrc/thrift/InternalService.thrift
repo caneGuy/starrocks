@@ -350,6 +350,8 @@ struct TQueryOptions {
 
   190: optional i64 column_view_concat_rows_limit;
   191: optional i64 column_view_concat_bytes_limit;
+
+  200: optional bool enable_chunk_compaction = true;
 }
 
 // A scan range plus the parameters needed to execute that scan.

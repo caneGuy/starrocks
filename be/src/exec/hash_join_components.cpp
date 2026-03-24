@@ -116,7 +116,7 @@ StatusOr<ChunkPtr> SingleHashJoinProberImpl::probe_chunk(RuntimeState* state) {
         return std::move(_accumulated_chunk);
     }
 
-    if (!_can_use_logical_compaction()) {
+    if (!state->enable_chunk_compaction() || !_can_use_logical_compaction()) {
         // Fall back to original behavior for complex join types
         // (outer joins, anti joins, etc. that need match tracking)
         DCHECK(_current_probe_has_remain && _probe_chunk);
