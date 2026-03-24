@@ -605,6 +605,29 @@ bool ChunkPipelineAccumulator::_check_json_schema_equallity(const Chunk* one, co
 void ChunkPipelineAccumulator::push(const ChunkPtr& chunk) {
     chunk->check_or_die();
     DCHECK(_out_chunk == nullptr);
+
+    _input_chunk_count++;
+    _input_row_count += chunk->num_rows();
+
+    // Large-batch passthrough (Arrow-rs BatchCoalescer style 3-way dispatch):
+    // If incoming chunk is already large enough (>= max_size/2), avoid unnecessary copying.
+    size_t passthrough_threshold = _max_size / 2;
+    if (chunk->num_rows() >= passthrough_threshold) {
+        if (_in_chunk == nullptr) {
+            // Case 1: Empty buffer + large batch -> direct passthrough
+            _out_chunk = chunk;
+            _passthrough_count++;
+            return;
+        } else {
+            // Case 2: Non-empty buffer + large batch -> flush buffer, keep large chunk for next
+            _out_chunk = std::move(_in_chunk);
+            _in_chunk = chunk;
+            _mem_usage = chunk->bytes_usage();
+            return;
+        }
+    }
+
+    // Case 3: Normal merge path for small chunks
     if (_in_chunk == nullptr) {
         _in_chunk = chunk;
         _mem_usage = chunk->bytes_usage();
@@ -617,6 +640,8 @@ void ChunkPipelineAccumulator::push(const ChunkPtr& chunk) {
     } else {
         _in_chunk->append(*chunk);
         _mem_usage += chunk->bytes_usage();
+        _compaction_count++;
+        _compaction_rows += chunk->num_rows();
     }
 
     if (_out_chunk == nullptr && (_in_chunk->num_rows() >= _max_size * LOW_WATERMARK_ROWS_RATE ||

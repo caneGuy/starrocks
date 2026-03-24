@@ -38,14 +38,16 @@ class SingleHashJoinProberImpl final : public HashJoinProberImpl {
 public:
     SingleHashJoinProberImpl(HashJoiner& hash_joiner) : HashJoinProberImpl(hash_joiner) {}
     ~SingleHashJoinProberImpl() override = default;
-    bool probe_chunk_empty() const override { return _probe_chunk == nullptr; }
-    Status on_input_finished(RuntimeState* state) override { return Status::OK(); }
+    bool probe_chunk_empty() const override { return _probe_chunk == nullptr && _accumulated_chunk == nullptr; }
+    Status on_input_finished(RuntimeState* state) override;
     Status push_probe_chunk(RuntimeState* state, ChunkPtr&& chunk) override;
     StatusOr<ChunkPtr> probe_chunk(RuntimeState* state) override;
     StatusOr<ChunkPtr> probe_remain(RuntimeState* state, bool* has_remain) override;
     void reset(RuntimeState* runtime_state) override {
         _probe_chunk.reset();
+        _accumulated_chunk.reset();
         _current_probe_has_remain = false;
+        _input_finished = false;
         if (_hash_table != nullptr) {
             _hash_table->reset_probe_state(runtime_state);
         }
@@ -53,10 +55,23 @@ public:
     void set_ht(JoinHashTable* hash_table) { _hash_table = hash_table; }
 
 private:
+    // Perform a single probe step and return the result chunk.
+    StatusOr<ChunkPtr> _do_probe_chunk(RuntimeState* state);
+
+    // Check if logical compaction is applicable for the current join type.
+    // We only compact for INNER JOIN and LEFT SEMI JOIN where there are no
+    // other_join_conjuncts, to avoid complications with match tracking.
+    bool _can_use_logical_compaction() const;
+
     JoinHashTable* _hash_table = nullptr;
     ChunkPtr _probe_chunk;
     Columns _key_columns;
     bool _current_probe_has_remain = false;
+
+    // --- Logical Compaction (Phase 2) ---
+    // Buffer to accumulate small probe output chunks before returning to downstream.
+    ChunkPtr _accumulated_chunk;
+    bool _input_finished = false;
 };
 
 Status SingleHashJoinProberImpl::push_probe_chunk(RuntimeState* state, ChunkPtr&& chunk) {
@@ -67,9 +82,21 @@ Status SingleHashJoinProberImpl::push_probe_chunk(RuntimeState* state, ChunkPtr&
     return Status::OK();
 }
 
-StatusOr<ChunkPtr> SingleHashJoinProberImpl::probe_chunk(RuntimeState* state) {
+Status SingleHashJoinProberImpl::on_input_finished(RuntimeState* state) {
+    _input_finished = true;
+    return Status::OK();
+}
+
+bool SingleHashJoinProberImpl::_can_use_logical_compaction() const {
+    // Only apply logical compaction for INNER JOIN and LEFT SEMI JOIN
+    // where there are no other_join_conjuncts (which need per-probe-batch
+    // match tracking that doesn't compose well with accumulation).
+    auto join_type = _hash_joiner.join_type();
+    return (join_type == TJoinOp::INNER_JOIN || join_type == TJoinOp::LEFT_SEMI_JOIN);
+}
+
+StatusOr<ChunkPtr> SingleHashJoinProberImpl::_do_probe_chunk(RuntimeState* state) {
     auto chunk = std::make_shared<Chunk>();
-    TRY_CATCH_ALLOC_SCOPE_START()
     DCHECK(_current_probe_has_remain && _probe_chunk);
     RETURN_IF_ERROR(_hash_table->probe(state, _key_columns, &_probe_chunk, &chunk, &_current_probe_has_remain));
     RETURN_IF_ERROR(_hash_joiner.filter_probe_output_chunk(chunk, *_hash_table));
@@ -77,8 +104,60 @@ StatusOr<ChunkPtr> SingleHashJoinProberImpl::probe_chunk(RuntimeState* state) {
     if (!_current_probe_has_remain) {
         _probe_chunk = nullptr;
     }
-    TRY_CATCH_ALLOC_SCOPE_END()
     return chunk;
+}
+
+StatusOr<ChunkPtr> SingleHashJoinProberImpl::probe_chunk(RuntimeState* state) {
+    TRY_CATCH_ALLOC_SCOPE_START()
+
+    // If the current probe chunk is exhausted but we have accumulated data,
+    // flush the buffer to downstream.
+    if (_accumulated_chunk != nullptr && _probe_chunk == nullptr) {
+        return std::move(_accumulated_chunk);
+    }
+
+    if (!_can_use_logical_compaction()) {
+        // Fall back to original behavior for complex join types
+        // (outer joins, anti joins, etc. that need match tracking)
+        DCHECK(_current_probe_has_remain && _probe_chunk);
+        return _do_probe_chunk(state);
+    }
+
+    // --- Logical Compaction path ---
+    // Within a single probe chunk, the hash table may produce many small
+    // result batches (e.g., 10-100 rows per probe when match rate is low).
+    // We accumulate these small batches and return one dense chunk.
+    size_t target_size = static_cast<size_t>(state->chunk_size());
+    size_t compact_threshold = target_size / 2;
+
+    while (_current_probe_has_remain && _probe_chunk) {
+        ASSIGN_OR_RETURN(auto chunk, _do_probe_chunk(state));
+
+        if (chunk == nullptr || chunk->is_empty()) {
+            continue;
+        }
+
+        if (_accumulated_chunk == nullptr) {
+            // First result: if already large enough, return directly (no copy)
+            if (chunk->num_rows() >= compact_threshold) {
+                return chunk;
+            }
+            _accumulated_chunk = std::move(chunk);
+        } else {
+            _accumulated_chunk->append(*chunk);
+            if (_accumulated_chunk->num_rows() >= compact_threshold) {
+                return std::move(_accumulated_chunk);
+            }
+        }
+    }
+
+    // Probe chunk exhausted. Flush whatever we have accumulated.
+    if (_accumulated_chunk != nullptr) {
+        return std::move(_accumulated_chunk);
+    }
+
+    TRY_CATCH_ALLOC_SCOPE_END()
+    return std::make_shared<Chunk>();
 }
 
 StatusOr<ChunkPtr> SingleHashJoinProberImpl::probe_remain(RuntimeState* state, bool* has_remain) {

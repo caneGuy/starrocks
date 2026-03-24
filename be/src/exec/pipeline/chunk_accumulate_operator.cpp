@@ -21,6 +21,13 @@ namespace starrocks::pipeline {
 Status ChunkAccumulateOperator::prepare(RuntimeState* state) {
     RETURN_IF_ERROR(Operator::prepare(state));
     _acc.set_max_size(state->chunk_size());
+
+    _compaction_count_counter = ADD_COUNTER(_unique_metrics, "CompactionCount", TUnit::UNIT);
+    _compaction_rows_counter = ADD_COUNTER(_unique_metrics, "CompactionRows", TUnit::UNIT);
+    _passthrough_count_counter = ADD_COUNTER(_unique_metrics, "PassthroughCount", TUnit::UNIT);
+    _input_chunk_count_counter = ADD_COUNTER(_unique_metrics, "InputChunkCount", TUnit::UNIT);
+    _input_row_count_counter = ADD_COUNTER(_unique_metrics, "InputRowCount", TUnit::UNIT);
+
     return Status::OK();
 }
 
@@ -49,6 +56,16 @@ Status ChunkAccumulateOperator::reset_state(RuntimeState* state, const std::vect
     _acc.reset_state();
 
     return Status::OK();
+}
+
+void ChunkAccumulateOperator::update_exec_stats(RuntimeState* state) {
+    if (_compaction_count_counter != nullptr) {
+        COUNTER_SET(_compaction_count_counter, static_cast<int64_t>(_acc.compaction_count()));
+        COUNTER_SET(_compaction_rows_counter, static_cast<int64_t>(_acc.compaction_rows()));
+        COUNTER_SET(_passthrough_count_counter, static_cast<int64_t>(_acc.passthrough_count()));
+        COUNTER_SET(_input_chunk_count_counter, static_cast<int64_t>(_acc.input_chunk_count()));
+        COUNTER_SET(_input_row_count_counter, static_cast<int64_t>(_acc.input_row_count()));
+    }
 }
 
 } // namespace starrocks::pipeline

@@ -460,4 +460,84 @@ TEST_F(ChunkPipelineAccumulatorTest, test_owner_info) {
     }
 }
 
+// --- Phase 1 Enhancement Tests: Passthrough + Metrics ---
+
+TEST_F(ChunkPipelineAccumulatorTest, test_large_batch_passthrough) {
+    ChunkPipelineAccumulator accumulator;
+    accumulator.set_max_size(4096);
+
+    // A chunk with >= max_size/2 (2048) rows should be passed through directly
+    // when the buffer is empty
+    accumulator.push(_generate_chunk(2500, 2));
+    ASSERT_TRUE(accumulator.has_output());
+    auto result = std::move(accumulator.pull());
+    ASSERT_EQ(result->num_rows(), 2500);
+    ASSERT_EQ(accumulator.passthrough_count(), 1);
+    ASSERT_EQ(accumulator.compaction_count(), 0);
+}
+
+TEST_F(ChunkPipelineAccumulatorTest, test_large_batch_flushes_buffer) {
+    ChunkPipelineAccumulator accumulator;
+    accumulator.set_max_size(4096);
+
+    // Push a small chunk first (goes to buffer)
+    accumulator.push(_generate_chunk(500, 2));
+    ASSERT_FALSE(accumulator.has_output());
+
+    // Push a large chunk — should flush the buffer and keep the large chunk
+    accumulator.push(_generate_chunk(3000, 2));
+    ASSERT_TRUE(accumulator.has_output());
+    auto result = std::move(accumulator.pull());
+    // The flushed buffer should be the small chunk (500 rows)
+    ASSERT_EQ(result->num_rows(), 500);
+
+    // The large chunk should be in the buffer now
+    accumulator.finalize();
+    ASSERT_TRUE(accumulator.has_output());
+    result = std::move(accumulator.pull());
+    ASSERT_EQ(result->num_rows(), 3000);
+}
+
+TEST_F(ChunkPipelineAccumulatorTest, test_compaction_metrics) {
+    ChunkPipelineAccumulator accumulator;
+    accumulator.set_max_size(4096);
+
+    // Push several small chunks that will be merged
+    for (int i = 0; i < 4; i++) {
+        accumulator.push(_generate_chunk(500, 1));
+    }
+
+    ASSERT_EQ(accumulator.input_chunk_count(), 4);
+    ASSERT_EQ(accumulator.input_row_count(), 2000);
+    // The first chunk becomes _in_chunk, subsequent 3 are appended → 3 compactions
+    ASSERT_EQ(accumulator.compaction_count(), 3);
+    ASSERT_EQ(accumulator.compaction_rows(), 1500);  // 3 * 500
+    ASSERT_EQ(accumulator.passthrough_count(), 0);
+}
+
+TEST_F(ChunkPipelineAccumulatorTest, test_small_chunks_merge_correctly) {
+    ChunkPipelineAccumulator accumulator;
+    accumulator.set_max_size(4096);
+
+    // Push many tiny chunks
+    for (int i = 0; i < 10; i++) {
+        accumulator.push(_generate_chunk(100, 1));
+        if (accumulator.has_output()) {
+            auto result = std::move(accumulator.pull());
+            // Merged chunks should be reasonably large
+            ASSERT_GE(result->num_rows(), 100);
+        }
+    }
+
+    // Finalize to get remaining data
+    accumulator.finalize();
+    if (accumulator.has_output()) {
+        auto result = std::move(accumulator.pull());
+        ASSERT_GT(result->num_rows(), 0);
+    }
+
+    // All 1000 rows should have been accounted for
+    ASSERT_EQ(accumulator.input_row_count(), 1000);
+}
+
 } // namespace starrocks

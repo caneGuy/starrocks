@@ -140,6 +140,13 @@ public:
     bool need_input() const;
     bool is_finished() const;
 
+    // --- Compaction metrics (Phase 1 enhancement) ---
+    size_t compaction_count() const { return _compaction_count; }
+    size_t compaction_rows() const { return _compaction_rows; }
+    size_t passthrough_count() const { return _passthrough_count; }
+    size_t input_chunk_count() const { return _input_chunk_count; }
+    size_t input_row_count() const { return _input_row_count; }
+
 private:
     static bool _check_json_schema_equallity(const Chunk* one, const Chunk* two);
 
@@ -157,6 +164,13 @@ private:
     // so incremental calculation is used to avoid becoming a performance bottleneck.
     size_t _mem_usage = 0;
     bool _finalized = false;
+
+    // --- Compaction statistics ---
+    size_t _compaction_count = 0;
+    size_t _compaction_rows = 0;
+    size_t _passthrough_count = 0;
+    size_t _input_chunk_count = 0;
+    size_t _input_row_count = 0;
 };
 
 class SegmentedColumn final : public std::enable_shared_from_this<SegmentedColumn> {

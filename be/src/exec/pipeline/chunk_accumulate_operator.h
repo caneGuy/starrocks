@@ -45,10 +45,15 @@ public:
     Status set_finished(RuntimeState* state) override;
 
     Status reset_state(RuntimeState* state, const std::vector<ChunkPtr>& refill_chunks) override;
-    void update_exec_stats(RuntimeState* state) override {}
+    void update_exec_stats(RuntimeState* state) override;
 
 private:
     ChunkPipelineAccumulator _acc;
+    RuntimeProfile::Counter* _compaction_count_counter = nullptr;
+    RuntimeProfile::Counter* _compaction_rows_counter = nullptr;
+    RuntimeProfile::Counter* _passthrough_count_counter = nullptr;
+    RuntimeProfile::Counter* _input_chunk_count_counter = nullptr;
+    RuntimeProfile::Counter* _input_row_count_counter = nullptr;
 };
 
 class ChunkAccumulateOperatorFactory final : public OperatorFactory {
