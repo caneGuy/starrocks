@@ -540,4 +540,60 @@ TEST_F(ChunkPipelineAccumulatorTest, test_small_chunks_merge_correctly) {
     ASSERT_EQ(accumulator.input_row_count(), 1000);
 }
 
+// Test: enable_compaction=false disables passthrough optimization
+TEST_F(ChunkPipelineAccumulatorTest, test_compaction_disabled) {
+    ChunkPipelineAccumulator accumulator;
+    accumulator.set_max_size(4096);
+    accumulator.set_enable_compaction(false);
+
+    // Push a large chunk (>= max_size/2) that would normally be passed through
+    accumulator.push(_generate_chunk(3000, 1));
+    // With compaction disabled, passthrough should NOT happen.
+    // Instead, the chunk goes into _in_chunk buffer (normal path).
+    ASSERT_EQ(accumulator.passthrough_count(), 0);
+
+    // The chunk is buffered, not output yet (below LOW_WATERMARK_ROWS_RATE of 0.75 * 4096 = 3072)
+    // Actually 3000 < 3072, so it stays in buffer
+    ASSERT_FALSE(accumulator.has_output());
+
+    // Push another small chunk to trigger output
+    accumulator.push(_generate_chunk(200, 1));
+    // Now _in_chunk (3000) + new (200) > 4096, so _in_chunk is flushed
+    ASSERT_TRUE(accumulator.has_output());
+    auto result = std::move(accumulator.pull());
+    ASSERT_EQ(result->num_rows(), 3000);
+}
+
+// Test: enable_compaction=true enables passthrough optimization (default behavior)
+TEST_F(ChunkPipelineAccumulatorTest, test_compaction_enabled) {
+    ChunkPipelineAccumulator accumulator;
+    accumulator.set_max_size(4096);
+    accumulator.set_enable_compaction(true);
+
+    // Push a large chunk (>= max_size/2 = 2048) → should be passed through
+    accumulator.push(_generate_chunk(3000, 1));
+    ASSERT_EQ(accumulator.passthrough_count(), 1);
+    ASSERT_TRUE(accumulator.has_output());
+    auto result = std::move(accumulator.pull());
+    ASSERT_EQ(result->num_rows(), 3000);
+}
+
+// Test: switching compaction on/off mid-stream
+TEST_F(ChunkPipelineAccumulatorTest, test_compaction_toggle) {
+    ChunkPipelineAccumulator accumulator;
+    accumulator.set_max_size(4096);
+
+    // Start with compaction enabled
+    accumulator.set_enable_compaction(true);
+    accumulator.push(_generate_chunk(2500, 1));
+    ASSERT_EQ(accumulator.passthrough_count(), 1);  // large chunk passed through
+    ASSERT_TRUE(accumulator.has_output());
+    std::move(accumulator.pull());
+
+    // Disable compaction
+    accumulator.set_enable_compaction(false);
+    accumulator.push(_generate_chunk(2500, 1));
+    ASSERT_EQ(accumulator.passthrough_count(), 1);  // still 1, no new passthrough
+}
+
 } // namespace starrocks

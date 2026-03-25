@@ -27,6 +27,11 @@ namespace starrocks::pipeline {
 // Decides whether to compact (merge) small/sparse chunks into dense chunks
 // based on runtime statistics, following the SIGMOD 2025 paper
 // "Data Chunk Compaction in Vectorized Execution".
+//
+// NOTE: This is currently a framework/API only. The actual execution paths
+// (ChunkPipelineAccumulator and hash join probe) use a fixed threshold
+// (target/2) for compaction decisions. This cost model will be integrated
+// in a future iteration when runtime statistics collection is available.
 class ChunkCompactionPolicy {
 public:
     struct CompactionDecision {

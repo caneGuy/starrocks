@@ -89,10 +89,19 @@ Status SingleHashJoinProberImpl::on_input_finished(RuntimeState* state) {
 
 bool SingleHashJoinProberImpl::_can_use_logical_compaction() const {
     // Only apply logical compaction for INNER JOIN and LEFT SEMI JOIN
-    // where there are no other_join_conjuncts (which need per-probe-batch
-    // match tracking that doesn't compose well with accumulation).
+    // where there are no other_join_conjuncts. With other_join_conjuncts,
+    // the probe path uses per-batch match tracking (_process_other_conjunct)
+    // that doesn't compose correctly with cross-batch accumulation.
     auto join_type = _hash_joiner.join_type();
-    return (join_type == TJoinOp::INNER_JOIN || join_type == TJoinOp::LEFT_SEMI_JOIN);
+    if (join_type != TJoinOp::INNER_JOIN && join_type != TJoinOp::LEFT_SEMI_JOIN) {
+        return false;
+    }
+    // other_join_conjuncts require per-probe-batch match state; accumulating
+    // results across multiple probe steps would break the match semantics.
+    if (_hash_joiner.has_other_join_conjunct()) {
+        return false;
+    }
+    return true;
 }
 
 StatusOr<ChunkPtr> SingleHashJoinProberImpl::_do_probe_chunk(RuntimeState* state) {

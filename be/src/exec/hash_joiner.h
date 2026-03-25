@@ -331,6 +331,7 @@ public:
     }
 
     const TJoinOp::type& join_type() const { return _join_type; }
+    bool has_other_join_conjunct() const { return !_other_join_conjunct_ctxs.empty(); }
 
     void attach_probe_observer(RuntimeState* state, pipeline::PipelineObserver* observer) {
         _builder_observable.add_observer(state, observer);
